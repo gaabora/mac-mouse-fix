@@ -338,31 +338,32 @@ import CocoaLumberjackSwift
         /// This func doesn't clearly belong into `ButtonTabController`
         ///     Is called when the helper is enabled
         
-        let hasBeenInited = config("State.remapsAreInitialized") as! Bool? ?? false
+        let hasBeenInited = config("State.remapsAreInitialized") as? Bool ?? false
         
         if !hasBeenInited {
             
             setConfig("State.remapsAreInitialized", true as NSObject)
             commitConfig()
             
-            let (_, _, bestPresetMatch) = MessagePortUtility.shared.getActiveDeviceInfo() ?? (nil, nil, nil)
+            /// Only apply default preset if Remaps is empty (first run)
+            let currentMapArray = config("Remaps") as? NSArray
+            let isEmpty = (currentMapArray == nil) || (currentMapArray!.count == 0)
             
-            /// This is copy-pasted from `restoreDefaults()`
-            
-            let currentMap = config("Remaps")
-            let defaultMap = config(bestPresetMatch == 3 ? "Constants.defaultRemaps.threeButtons" : "Constants.defaultRemaps.fiveButtons")
-            
-            if (currentMap != defaultMap) {
+            if isEmpty {
+                let (_, _, bestPresetMatch) = MessagePortUtility.shared.getActiveDeviceInfo() ?? (nil, nil, nil)
+                let defaultMap = config(bestPresetMatch == 3 ? "Constants.defaultRemaps.threeButtons" : "Constants.defaultRemaps.fiveButtons")
                 
-                /// Set config
-                setConfig("Remaps", defaultMap!)
-                commitConfig()
-                
-                /// Reload table
-                /// Note: It feels a bit hacky to call `updateColumnWidths()` here. Maybe this should be handled automatically inside the remapTable code.
-                DispatchQueue.main.async {
-                    MainAppState.shared.remapTableController?.reloadAll()
-                    MainAppState.shared.buttonTabController?.tableView.updateColumnWidths()
+                if let defaultMap = defaultMap {
+                    /// Set config
+                    setConfig("Remaps", defaultMap)
+                    commitConfig()
+                    
+                    /// Reload table
+                    /// Note: It feels a bit hacky to call `updateColumnWidths()` here. Maybe this should be handled automatically inside the remapTable code.
+                    DispatchQueue.main.async {
+                        MainAppState.shared.remapTableController?.reloadAll()
+                        MainAppState.shared.buttonTabController?.tableView.updateColumnWidths()
+                    }
                 }
             }
         }
