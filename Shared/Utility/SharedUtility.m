@@ -800,7 +800,7 @@ int8_t sign(double x) {
     ///     - Specifying a subsystem and category allows us to configure logging using `Info.plist > OSLogPreferences`
     ///         > Also See: https://github.com/noah-nuebling/mac-mouse-fix-error-logging-improvement-ideas-october-2024?tab=readme-ov-file
     
-    #define kMFOSLogSubsystem   @"com.nuebling.mac-mouse-fix"
+    #define kMFOSLogSubsystem   @"com.ft07.mac-mouse-fix"
     #define kMFOSLogCategory    @"main-category"
     DDOSLogger *logger = [[DDOSLogger alloc] initWithSubsystem: kMFOSLogSubsystem category: kMFOSLogCategory logLevelMapper: [[DDOSLogLevelMapperDefault alloc] init]];
     [DDLog addLogger: logger];
