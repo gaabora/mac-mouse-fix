@@ -39,18 +39,21 @@ jobs:
           echo "Configuration: ${{ matrix.config }}"
           echo "Architecture: ${{ matrix.arch }}"
 
-          # Detect whether to use workspace or project
-          if ls *.xcworkspace 1>/dev/null 2>&1; then
+          # Detect project or workspace safely
+          if compgen -G "*.xcworkspace" > /dev/null; then
             filetype_parameter="workspace"
-            file_to_build=$(ls *.xcworkspace | head -1)
+            file_to_build="$(ls *.xcworkspace | head -1)"
           else
             filetype_parameter="project"
-            file_to_build=$(ls *.xcodeproj | head -1)
+            file_to_build="$(ls *.xcodeproj | head -1)"
           fi
 
-          echo "Building $file_to_build ($filetype_parameter)"
+          echo "Detected build container: '$file_to_build' ($filetype_parameter)"
 
-          # Perform the build
+          build_dir="${{ github.workspace }}/build/${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}"
+          mkdir -p "$build_dir"
+
+          # Run build with correct quoting
           xcodebuild clean build \
             -${filetype_parameter} "$file_to_build" \
             -scheme "${{ matrix.scheme }}" \
@@ -60,13 +63,29 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             ONLY_ACTIVE_ARCH=NO \
-            BUILD_DIR="${{ github.workspace }}/build/${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}" \
+            BUILD_DIR="$build_dir" \
             | xcpretty
 
-      - name: Upload built app
+          echo "Build finished for ${{ matrix.scheme }} - checking outputs:"
+          find "$build_dir" -type d -name "*.app" || echo "No .app found"
+
+      - name: Zip built app (if exists)
+        if: success()
+        run: |
+          build_dir="${{ github.workspace }}/build/${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}"
+          app_path=$(find "$build_dir" -type d -name "*.app" | head -1 || true)
+          if [ -n "$app_path" ]; then
+            echo "Zipping: $app_path"
+            cd "$(dirname "$app_path")"
+            zip -r "${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}.zip" "$(basename "$app_path")"
+          else
+            echo "⚠️ No .app found to zip"
+          fi
+
+      - name: Upload .app (zipped)
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}
           path: |
-            build/${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}/Build/Products/${{ matrix.config }}/*.app
+            build/**/${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}.zip
