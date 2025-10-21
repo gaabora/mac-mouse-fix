@@ -313,20 +313,20 @@ import CocoaLumberjackSwift
         
         /// We do the exact same thing in the scrollTab
         
-        let buttonsAreKilled = config("General.buttonKillSwitch") as! Bool
-        let scrollIsKilled = config("General.scrollKillSwitch") as! Bool
+        // let buttonsAreKilled = config("General.buttonKillSwitch") as! Bool
+        // let scrollIsKilled = config("General.scrollKillSwitch") as! Bool
         
-        if buttonsAreKilled || scrollIsKilled {
+        // if buttonsAreKilled || scrollIsKilled {
             
-            /// Turn off killSwitch
-            ///     NOTE: We also turn off the scrollKillSwitch because otherwise we can't record click and scroll in addMode.
-            setConfig("General.buttonKillSwitch", false as NSObject)
-            setConfig("General.scrollKillSwitch", false as NSObject)
-            commitConfig()
+        //     /// Turn off killSwitch
+        //     ///     NOTE: We also turn off the scrollKillSwitch because otherwise we can't record click and scroll in addMode.
+        //     setConfig("General.buttonKillSwitch", false as NSObject)
+        //     setConfig("General.scrollKillSwitch", false as NSObject)
+        //     commitConfig()
             
-            /// Show user feedback
-            ToastCreator.showReviveToast(showButtons: buttonsAreKilled, showScroll: scrollIsKilled)
-        }
+        //     /// Show user feedback
+        //     ToastCreator.showReviveToast(showButtons: buttonsAreKilled, showScroll: scrollIsKilled)
+        // }
     }
     
     //
