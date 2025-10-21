@@ -59,7 +59,7 @@ jobs:
             -${filetype_parameter} "$file_to_build" \
             -scheme "${{ matrix.scheme }}" \
             -configuration "${{ matrix.config }}" \
-            -destination "platform=macOS,arch=${{ matrix.arch }},name=Any Mac" \
+            -destination "platform=macOS,arch=${{ matrix.arch }},name=My Mac" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
