@@ -1,4 +1,4 @@
-name: Xcode - Build and Analyze
+name: Xcode - Multi Variant Build & Analyze
 
 on:
   push:
@@ -8,26 +8,60 @@ on:
 
 jobs:
   build:
-    name: Build and analyse default scheme using xcodebuild command
-    runs-on: macos-latest
+    name: Build ${{ matrix.scheme }} (${{ matrix.arch }} - ${{ matrix.config }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        scheme: [ "App", "App - Release", "Helper", "Helper - Release" ]
+        config: [ "Debug", "Release" ]
+        arch: [ "x86_64", "arm64" ]
+
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: list schemes
-        run: xcodebuild -list
-      - name: Set Default Scheme
+
+      - name: Show Xcode info
         run: |
-          scheme_list=$(xcodebuild -list -json | tr -d "\n")
-          default=$(echo $scheme_list | ruby -e "require 'json'; puts JSON.parse(STDIN.gets)['project']['targets'][0]")
-          echo $default | cat >default
-          echo Using default scheme: $default
-      - name: Build
-        env:
-          scheme: 'App'
-          # scheme: ${{ 'default' }}
+          xcodebuild -version
+          sw_vers
+          uname -m
+
+      - name: Verify available schemes
+        run: xcodebuild -list -project "Mouse Fix.xcodeproj"
+
+      - name: Build ${{ matrix.scheme }}
         run: |
-          if [ $scheme = default ]; then scheme=$(cat default); fi
-          if [ "`ls -A | grep -i \\.xcworkspace\$`" ]; then filetype_parameter="workspace" && file_to_build="`ls -A | grep -i \\.xcworkspace\$`"; else filetype_parameter="project" && file_to_build="`ls -A | grep -i \\.xcodeproj\$`"; fi
-          file_to_build=`echo $file_to_build | awk '{$1=$1;print}'`
-          xcodebuild clean build analyze -scheme "$scheme" -"$filetype_parameter" "$file_to_build" | xcpretty && exit ${PIPESTATUS[0]}
+          echo "Building scheme: ${{ matrix.scheme }}"
+          echo "Configuration: ${{ matrix.config }}"
+          echo "Architecture: ${{ matrix.arch }}"
+
+          # Determine whether to use .xcworkspace or .xcodeproj
+          if ls *.xcworkspace 1>/dev/null 2>&1; then
+            filetype_parameter="workspace"
+            file_to_build=$(ls *.xcworkspace | head -1)
+          else
+            filetype_parameter="project"
+            file_to_build=$(ls *.xcodeproj | head -1)
+          fi
+
+          echo "Building $file_to_build ($filetype_parameter)"
+
+          # Perform the build
+          xcodebuild clean build analyze \
+            -${filetype_parameter} "$file_to_build" \
+            -scheme "${{ matrix.scheme }}" \
+            -configuration "${{ matrix.config }}" \
+            -destination "platform=macOS,arch=${{ matrix.arch }},name=Any Mac" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            | xcpretty
+
+      - name: Report status
+        if: always()
+        run: echo "Finished build for ${{ matrix.scheme }} (${{ matrix.config }}, ${{ matrix.arch }})"
