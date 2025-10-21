@@ -1,4 +1,4 @@
-name: Xcode - Multi Variant Build & Upload
+name: Xcode Build x86_64
 
 on:
   push:
@@ -8,63 +8,44 @@ on:
 
 jobs:
   build:
-    name: Build ${{ matrix.scheme }} (${{ matrix.arch }} - ${{ matrix.config }})
-    runs-on: macos-15
-    strategy:
-      fail-fast: false
-      matrix:
-        scheme: [ "App - Release", "Helper - Release" ]
-        config: [ "Release" ]
-        arch: [ "x86_64" ]
-        # scheme: [ "App", "App - Release", "Helper", "Helper - Release" ]
-        # config: [ "Debug", "Release" ]
-        # arch: [ "x86_64", "arm64" ]
-
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    name: Build Helper + App (x86_64)
+    runs-on: macos-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show Xcode info
-        run: |
-          xcodebuild -version
-          sw_vers
-          uname -m
-
-      - name: Clean Derived Data
+      - name: Clean Derived Data & Module Cache
         run: |
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
           rm -rf ~/Library/Developer/Xcode/ModuleCache.noindex/*
 
-      - name: Build ${{ matrix.scheme }}
+      - name: Set up build directory
+        run: mkdir -p build
+
+      - name: Detect project/workspace
+        id: detect
         run: |
-          echo "Building scheme: ${{ matrix.scheme }}"
-          echo "Configuration: ${{ matrix.config }}"
-          echo "Architecture: ${{ matrix.arch }}"
-
-          # Detect .xcworkspace or .xcodeproj safely, handling spaces
-          file_to_build=""
           if compgen -G "*.xcworkspace" > /dev/null; then
-            while IFS= read -r f; do file_to_build="$f"; break; done < <(find . -maxdepth 1 -name "*.xcworkspace" -print)
-            filetype_parameter="workspace"
+            echo "filetype=workspace" >> $GITHUB_OUTPUT
+            file=$(find . -maxdepth 1 -name "*.xcworkspace" | head -1)
+            echo "file=$file" >> $GITHUB_OUTPUT
           else
-            while IFS= read -r f; do file_to_build="$f"; break; done < <(find . -maxdepth 1 -name "*.xcodeproj" -print)
-            filetype_parameter="project"
+            echo "filetype=project" >> $GITHUB_OUTPUT
+            file=$(find . -maxdepth 1 -name "*.xcodeproj" | head -1)
+            echo "file=$file" >> $GITHUB_OUTPUT
           fi
+          echo "Detected $filetype: $file"
 
-          echo "Detected build container: '$file_to_build' ($filetype_parameter)"
-
-          build_dir="${{ github.workspace }}/build/${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}"
+      - name: Build Helper first
+        run: |
+          build_dir="$PWD/build/Helper-Release-x86_64"
           mkdir -p "$build_dir"
-
-          # Run build with correct quoting
           xcodebuild clean build \
-            -${filetype_parameter} "$file_to_build" \
-            -scheme "${{ matrix.scheme }}" \
-            -configuration "${{ matrix.config }}" \
-            -destination "platform=macOS,arch=${{ matrix.arch }},name=My Mac" \
+            -${{ steps.detect.outputs.filetype }} "${{ steps.detect.outputs.file }}" \
+            -scheme "Mac Mouse Fix Helper" \
+            -configuration "Release" \
+            -destination "platform=macOS,arch=x86_64,name=My Mac" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -73,26 +54,34 @@ jobs:
             BUILD_DIR="$build_dir" \
             | xcpretty
 
-          echo "Build finished for ${{ matrix.scheme }} - checking outputs:"
-          find "$build_dir" -type d -name "*.app" || echo "No .app found"
-
-      - name: Zip built app (if exists)
-        if: success()
+      - name: Build App next
         run: |
-          build_dir="${{ github.workspace }}/build/${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}"
-          app_path=$(find "$build_dir" -type d -name "*.app" | head -1 || true)
-          if [ -n "$app_path" ]; then
-            echo "Zipping: $app_path"
-            cd "$(dirname "$app_path")"
-            zip -r "${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}.zip" "$(basename "$app_path")"
-          else
-            echo "⚠️ No .app found to zip"
-          fi
+          build_dir="$PWD/build/App-Release-x86_64"
+          mkdir -p "$build_dir"
+          xcodebuild clean build \
+            -${{ steps.detect.outputs.filetype }} "${{ steps.detect.outputs.file }}" \
+            -scheme "App - Release" \
+            -configuration "Release" \
+            -destination "platform=macOS,arch=x86_64,name=My Mac" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            SWIFT_COMPILATION_MODE=wholemodule \
+            BUILD_DIR="$build_dir" \
+            | xcpretty
 
-      - name: Upload .app (zipped)
-        if: success()
+      - name: Zip built apps
+        run: |
+          for app in build/*-x86_64/Release/*.app; do
+            echo "Zipping $app"
+            pushd "$(dirname "$app")"
+            zip -r "$(basename "$app").zip" "$(basename "$app")"
+            popd
+          done
+
+      - name: Upload built apps
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}
-          path: |
-            build/**/${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}.zip
+          name: MacMouseFix-x86_64
+          path: build/*-x86_64/Release/*.app.zip
