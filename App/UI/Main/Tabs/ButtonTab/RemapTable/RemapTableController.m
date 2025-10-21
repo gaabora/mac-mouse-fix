@@ -283,7 +283,7 @@
         scrollView.layer.cornerCurve = kCACornerCurveContinuous;
         if (runningPreRelease()) dispatch_async(dispatch_get_main_queue(), ^{ if (!MainAppState.shared.window.contentView.prefersCompactControlSizeMetrics) assert(false); });
     }
-    else
+//    else
         scrollView.layer.cornerRadius = MFNSBoxCornerRadius();
     
     scrollView.automaticallyAdjustsContentInsets = NO;

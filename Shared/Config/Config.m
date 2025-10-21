@@ -465,8 +465,10 @@ NSDictionary *_Nullable _readDictPlist(NSURL *url, bool mutable, NSError * __aut
         ///     - Other ideas for what to when things fail: (Instead of crashing or replacing)
         ///         - Keep a copy of the old config file before replacing it. -> Better debugging.
         ///         - Retry instead of crashing (Could build retry directly into `_readDictPlist()`)
-        #define fail(format, args...) \
-            mfabort(@"_loadAndRepair: " format, ## args);
+        #define fail(format, args...) ({ \
+            DDLogError(@"_loadAndRepair: " format, ## args); \
+            goto dontReplace; \
+        })
         
         #define log(level, format, args...) \
             DDLog ## level (@"_loadAndRepair: " format, ## args)
@@ -487,11 +489,16 @@ NSDictionary *_Nullable _readDictPlist(NSURL *url, bool mutable, NSError * __aut
     self->_config = (id)_readDictPlist(Locator.configURL, true, &err);
     if (!self->_config || err) {
         if (err.domain == NSCocoaErrorDomain && err.code == NSFileReadNoSuchFileError) { /// Create config file if none exists
-            log(Info, @"Config file doesn't exist. Creating a new one.");
+            log(Info, @"Config file doesn't exist. Creating a new one from default config.");
             err = nil; /// NSFileManager doesn't reset the error
             bool success = [NSFileManager.defaultManager createDirectoryAtURL: Locator.configURL.URLByDeletingLastPathComponent withIntermediateDirectories: YES attributes: nil error: &err]; /// [Aug 2025] Not sure what to choose for the `attributes:`.
             if (!success || err) fail(@"Creating directory for config failed with error %@", err);
-            goto replace;
+            
+            /// Instead of goto replace, directly use the default config and save it
+            self->_config = [defaultConfig mutableCopy];
+            [self writeConfigToFile];
+            log(Info, @"Created new config file from default config.");
+            goto dontReplace;
         }
         else
             fail(@"Loading config failed with error: %@", err);
@@ -507,9 +514,9 @@ NSDictionary *_Nullable _readDictPlist(NSURL *url, bool mutable, NSError * __aut
             if (!targetVersionNS)
                 fail("Couldn't get default configVersion. MMF bundle must be corrupt/wrong.");
             if (!currentVersionNS) {
-                /// [Aug 2025] Not sure if we really wanna replace here. We really don't like false-positive replaces. But at this point we already successfully read the file so the content is probably truly corrupt. Perhaps we should replace here but keep a backup-copy? Crashing could also make sense.
-                log(Error, "Couldn't get current configVersion. Something is weird.");
-                goto replace;
+                /// [Aug 2025] Instead of replacing, log error and keep existing config
+                log(Error, "Couldn't get current configVersion. Config file may be corrupted, but keeping existing config to avoid data loss.");
+                goto dontReplace;
             }
             currentVersion = currentVersionNS.intValue;
             targetVersion  = targetVersionNS.intValue;
@@ -593,6 +600,20 @@ NSDictionary *_Nullable _readDictPlist(NSURL *url, bool mutable, NSError * __aut
     
     replace:
     {
+        /// Create backup of existing config before replacing
+        NSString *backupPath = [Locator.configURL.path stringByAppendingString:@".backup"];
+        NSError *backupError = nil;
+        if ([NSFileManager.defaultManager fileExistsAtPath:Locator.configURL.path]) {
+            [NSFileManager.defaultManager copyItemAtPath:Locator.configURL.path 
+                                                  toPath:backupPath 
+                                                   error:&backupError];
+            if (backupError) {
+                log(Error, "Failed to create config backup: %@", backupError);
+            } else {
+                log(Info, "Created config backup at: %@", backupPath);
+            }
+        }
+        
         log(Info, "Replacing config with default config...");
         self->_config = defaultConfig;
         commitConfig();
