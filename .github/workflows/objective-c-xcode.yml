@@ -33,6 +33,11 @@ jobs:
           sw_vers
           uname -m
 
+      - name: Clean Derived Data
+        run: |
+          rm -rf ~/Library/Developer/Xcode/DerivedData/*
+          rm -rf ~/Library/Developer/Xcode/ModuleCache.noindex/*
+
       - name: Build ${{ matrix.scheme }}
         run: |
           echo "Building scheme: ${{ matrix.scheme }}"
@@ -64,6 +69,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             ONLY_ACTIVE_ARCH=NO \
+            SWIFT_COMPILATION_MODE=wholemodule \
             BUILD_DIR="$build_dir" \
             | xcpretty
 
