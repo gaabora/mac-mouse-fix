@@ -41,10 +41,11 @@ jobs:
         run: |
           build_dir="$PWD/build/Helper-Release-x86_64"
           mkdir -p "$build_dir"
+
           xcodebuild clean build \
-            -${{ steps.detect.outputs.filetype }} "${{ steps.detect.outputs.file }}" \
+            -project "Mouse Fix.xcodeproj" \
             -scheme "Mac Mouse Fix Helper" \
-            -configuration "Release" \
+            -configuration Release \
             -destination "platform=macOS,arch=x86_64,name=My Mac" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
@@ -52,7 +53,10 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             SWIFT_COMPILATION_MODE=wholemodule \
             BUILD_DIR="$build_dir" \
+            -UseModernBuildSystem=YES \
+            -parallelizeTargets=NO \
             | xcpretty
+
 
       - name: Build App next
         run: |
