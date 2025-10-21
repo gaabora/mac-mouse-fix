@@ -1,4 +1,4 @@
-name: Xcode - Multi Variant Build & Analyze
+name: Xcode - Multi Variant Build & Upload
 
 on:
   push:
@@ -13,9 +13,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scheme: [ "App", "App - Release", "Helper", "Helper - Release" ]
-        config: [ "Debug", "Release" ]
-        arch: [ "x86_64", "arm64" ]
+        scheme: [ "App - Release", "Helper - Release" ]
+        config: [ "Release" ]
+        arch: [ "x86_64" ]
+        # scheme: [ "App", "App - Release", "Helper", "Helper - Release" ]
+        # config: [ "Debug", "Release" ]
+        # arch: [ "x86_64", "arm64" ]
 
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
@@ -30,16 +33,13 @@ jobs:
           sw_vers
           uname -m
 
-      - name: Verify available schemes
-        run: xcodebuild -list -project "Mouse Fix.xcodeproj"
-
       - name: Build ${{ matrix.scheme }}
         run: |
           echo "Building scheme: ${{ matrix.scheme }}"
           echo "Configuration: ${{ matrix.config }}"
           echo "Architecture: ${{ matrix.arch }}"
 
-          # Determine whether to use .xcworkspace or .xcodeproj
+          # Detect whether to use workspace or project
           if ls *.xcworkspace 1>/dev/null 2>&1; then
             filetype_parameter="workspace"
             file_to_build=$(ls *.xcworkspace | head -1)
@@ -51,7 +51,7 @@ jobs:
           echo "Building $file_to_build ($filetype_parameter)"
 
           # Perform the build
-          xcodebuild clean build analyze \
+          xcodebuild clean build \
             -${filetype_parameter} "$file_to_build" \
             -scheme "${{ matrix.scheme }}" \
             -configuration "${{ matrix.config }}" \
@@ -60,8 +60,13 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             ONLY_ACTIVE_ARCH=NO \
+            BUILD_DIR="${{ github.workspace }}/build/${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}" \
             | xcpretty
 
-      - name: Report status
-        if: always()
-        run: echo "Finished build for ${{ matrix.scheme }} (${{ matrix.config }}, ${{ matrix.arch }})"
+      - name: Upload built app
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}
+          path: |
+            build/${{ matrix.scheme }}-${{ matrix.config }}-${{ matrix.arch }}/Build/Products/${{ matrix.config }}/*.app
